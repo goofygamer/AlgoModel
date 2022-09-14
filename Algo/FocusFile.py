@@ -1,5 +1,6 @@
 import MetaTrader5 as mt5
 from datetime import datetime
+import pandas as pd
 
 '''
 This file is meant to ---
@@ -76,7 +77,65 @@ def openPosition(pair, order_type, size, tp_distance = None, stop_distance = Non
     else:
         print("Order successfully placed!")
 
+#Information on the trade (important for closing!)
+def positionsGet(symbol = None):
+    if symbol is None:
+        res = mt5.positions_get()
+    else:
+        res = mt5.positions_get(symbol = symbol)
+    
 
+    if res is not None and res != ():
+        df = pd.DataFrame(list(res), columns = res[0]._asdict().keys())
+        df['time'] = pd.to_datetime(df['time'], unit = 's')
+        return df
+    
+    return pd.DataFrame()
 
+def closePosition(deal_id):
+    open_positions = positionsGet()
+    open_positions = open_positions[open_positions['ticket'] == deal_id]
 
+    order_type = open_positions['type'][0]
+    symbol = open_positions['symbol'][0]
+    volume = open_positions['volume'][0]
+    
+    #Redefining the order type
+    if order_type == mt5.ORDER_TYPE_BUY:
+        order_type = mt5.ORDER_TYPE_SELL
+        price = mt5.symbol_info_tick(symbol).bid
+    else:
+        order_type = mt5.ORDER_TYPE_SELL
+        price = mt5.symbol_info_tick(symbol).ask
+    
+    #Creating a request
+    close_request = {
+        "action": mt5.TRADE_ACTION_DEAL,
+        "symbol": symbol,
+        "volume": float(volume),
+        "type": order_type,
+        "position": deal_id,
+        "price": price,
+        "magic": 234000,
+        "comment": "close the trade",
+        "type_time": mt5.ORDER_TIME_GTC,
+        "type_filling": mt5.ORDER_FILLING_IOC,
+    }
 
+    #Submit the order request
+    result = mt5.order_send(close_request)
+
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        print("Failed to close order :(")
+    else:
+        print("Order successfully closed!")
+
+#Close all trades referring to a symbol
+def close_positions_by_symbol(symbol):
+    open_positions = positionsGet(symbol)
+    open_positions['ticket'].apply(lambda x: closePosition(x))
+
+connect()
+openPosition("EURUSD", "BUY", 1, 300, 100)
+openPosition("EURUSD", "BUY", 5, 200, 50)
+close_positions_by_symbol("EURUSD")
