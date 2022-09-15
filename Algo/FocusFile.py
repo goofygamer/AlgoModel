@@ -4,6 +4,7 @@ import pandas as pd
 import time
 import schedule
 import pytz
+import talib as ta
 
 '''
 This file is meant to ---
@@ -140,8 +141,10 @@ def close_positions_by_symbol(symbol):
 
 #Connecting to MT5 to get the data
 def run_trader(time_frame):
+    print(f'Running trade at {datetime.now()}')
     connect()
-    get_data(time_frame)
+    pair_data = get_data(time_frame)
+    check_trades(time_frame, pair_data)
 
 #Get data from MT5
 def get_data(time_frame):
@@ -172,13 +175,23 @@ def live_trading():
         schedule.run_pending()
         time.sleep(1)
 
+#Implement whether to BUY or SELL
+def check_trades(time_frame, pair_data):
+    for pair, data in pair_data.items():
+        #simple strategy for buying and selling
 
+        #Simplified moving average
+        data['SMA'] = ta.SMA(data['close'], 10)
 
+        #Exponential moving average
+        data['EMA'] = ta.EMA(data['close'], 50)
+
+        #Get the last row
+        last_row = data.tail(1)
+
+        for index, last in last_row.iterrows():
+            if last['close'] > last['EMA'] and last['close'] < last['SMA']:
+                openPosition(pair, "BUY", 1, 300, 100)
 
 if __name__ == '__main__':
     live_trading()
-
-connect()
-openPosition("EURUSD", "BUY", 1, 300, 100)
-openPosition("EURUSD", "BUY", 5, 200, 50)
-close_positions_by_symbol("EURUSD")
