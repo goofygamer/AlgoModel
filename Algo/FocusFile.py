@@ -1,6 +1,9 @@
 import MetaTrader5 as mt5
 from datetime import datetime
 import pandas as pd
+import time
+import schedule
+import pytz
 
 '''
 This file is meant to ---
@@ -134,6 +137,46 @@ def closePosition(deal_id):
 def close_positions_by_symbol(symbol):
     open_positions = positionsGet(symbol)
     open_positions['ticket'].apply(lambda x: closePosition(x))
+
+#Connecting to MT5 to get the data
+def run_trader(time_frame):
+    connect()
+    get_data(time_frame)
+
+#Get data from MT5
+def get_data(time_frame):
+    pairs = ['EURUSD', 'USDCAD']
+    pair_data = {}
+
+    for pair in pairs:
+        utc_start = datetime(2021, 1, 1)
+        date_end = datetime.now().astimezone(pytz.timezone('Europe/Athens'))
+        date_end = datetime(date_end.year, date_end.month, date_end.day, hour = date_end.hour, minute = date_end.minute)
+        rates = mt5.copy_rates_range(pair, time_frame, utc_start, date_end)
+        rates_frame = pd.DataFrame(rates)
+        rates_frame['time'] = pd.to_datetime(rates_frame['time'], unit = 's')
+        rates_frame.drop(rates_frame.tail(1).index, inplace = True)
+        pair_data[pair] = rates_frame
+        print(pair_data[pair])
+            
+    return pair_data
+
+#Live trading
+def live_trading():
+    schedule.every().hour.at(":00").do(run_trader, mt5.TIMEFRAME_M15)
+    schedule.every().hour.at(":15").do(run_trader, mt5.TIMEFRAME_M15)
+    schedule.every().hour.at(":30").do(run_trader, mt5.TIMEFRAME_M15)
+    schedule.every().hour.at(":45").do(run_trader, mt5.TIMEFRAME_M15)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+
+
+if __name__ == '__main__':
+    live_trading()
 
 connect()
 openPosition("EURUSD", "BUY", 1, 300, 100)
